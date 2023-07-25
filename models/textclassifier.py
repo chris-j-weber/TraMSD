@@ -48,9 +48,9 @@ class SarcasmDataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         df = pd.read_json(self.data_file, lines=True)
         # Take only 10% of the dataset for quick testing
-        df = df.sample(frac=0.05)
-        train_val, test = train_test_split(df, test_size=0.2)
-        train, val = train_test_split(train_val, test_size=0.2)
+        #df = df.sample(frac=0.1)
+        train_val, test = train_test_split(df, test_size=0.1)
+        train, val = train_test_split(train_val, test_size=0.1)
         self.train_dataset = SarcasmDataset(train['headline'].to_list(), train['is_sarcastic'].to_list(), self.tokenizer, self.max_length)
         self.val_dataset = SarcasmDataset(val['headline'].to_list(), val['is_sarcastic'].to_list(), self.tokenizer, self.max_length)
         self.test_dataset = SarcasmDataset(test['headline'].to_list(), test['is_sarcastic'].to_list(), self.tokenizer, self.max_length)
@@ -124,11 +124,12 @@ class SarcasmClassifier(pl.LightningModule):
 def main():
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     model = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=2)
-    data_module = SarcasmDataModule('../data/headlines.json', tokenizer)
+    #data_module = SarcasmDataModule('../data/headlines.csv', tokenizer)
+    data_module = SarcasmDataModule('../data/Sarcasm_Headlines_Dataset.json', tokenizer)
     classifier = SarcasmClassifier(model)
     #wandb_logger = pl.loggers.WandbLogger(project='sarcasm-detection')
     #trainer = pl.Trainer(max_epochs=1, accelerator='auto', logger=wandb_logger)
-    trainer = pl.Trainer(max_epochs=1, accelerator='auto')
+    trainer = pl.Trainer(max_epochs=2, accelerator='auto')
     trainer.fit(classifier, data_module)
     trainer.test(datamodule=data_module)
 
