@@ -124,8 +124,8 @@ class SarcasmClassifier(pl.LightningModule):
 def main():
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     model = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=2)
-    #data_module = SarcasmDataModule('../data/headlines.csv', tokenizer)
-    data_module = SarcasmDataModule('../data/Sarcasm_Headlines_Dataset.json', tokenizer)
+    #data_module = SarcasmDataModule('../../data/headlines/headlines.csv', tokenizer)
+    data_module = SarcasmDataModule('../../data/headlines/Sarcasm_Headlines_Dataset.json', tokenizer)
     classifier = SarcasmClassifier(model)
     #wandb_logger = pl.loggers.WandbLogger(project='sarcasm-detection')
     #trainer = pl.Trainer(max_epochs=1, accelerator='auto', logger=wandb_logger)
@@ -134,7 +134,7 @@ def main():
     trainer.test(datamodule=data_module)
 
     checkpoint = {'model': classifier.state_dict(), 'optimizer': classifier.configure_optimizers().state_dict()}
-    torch.save(checkpoint, '../checkpoints/textmodal.ckpt')
+    torch.save(checkpoint, '../../checkpoints/textmodal.ckpt')
 
 if __name__ == "__main__":
     main()
