@@ -3,12 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import CLIPModel, BertConfig
-from transformers.models.bert.modeling_bert import Bertlayer
+from transformers.models.bert.modeling_bert import BertLayer
 
 class Encoder(nn.Module):
     def __init__(self, config, layer_number):
         super(Encoder, self).__init__()
-        layer = Bertlayer(config)
+        layer = BertLayer(config)
         self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(layer_number)])
 
     def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):

@@ -7,8 +7,7 @@ from torch.utils.data import Dataset
 logger = logging.getLogger(__name__)
 
 class Mustard(Dataset):
-    def __init__(self, mode, text_name, limit=None):
-        self.text_name = text_name
+    def __init__(self, mode, limit=None):
         self.data = self.load_data(mode, limit)
         self.image_ids = list(self.data.keys())
     

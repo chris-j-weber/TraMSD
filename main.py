@@ -37,6 +37,7 @@ def set_args():
     parser.add_argument('--text_max_len', default=77, type=int, help='max length of text for clip')
     parser.add_argument('--seed', default=24, type=int, help='random seed')
     parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
+    parser.add_argument('--device', default='0', type=str, help='device')
 
     #data
     parser.add_argument('--labels', default=2, type=int, help='number of labels')
@@ -48,7 +49,7 @@ def set_args():
 
     #parser.add_argument('--', default=, type=, help='')
 
-    return parser.pars_args()
+    return parser.parse_args()
     
 def main():
     args = set_args()
@@ -72,9 +73,9 @@ def main():
     #wandb.init(project='mmtsarcasm', notes='mmt', tags=['mmt'], config=vars(args))
     #wandb.watch_called = False
 
-    train_data = Mustard(args, mode='train')
-    val_data = Mustard(args, mode='val')
-    test_data = Mustard(args, mode='test')
+    train_data = Mustard(mode='train')
+    val_data = Mustard(mode='val')
+    test_data = Mustard(mode='test')
 
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
     model = CLIP(args)
