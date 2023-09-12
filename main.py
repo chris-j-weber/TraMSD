@@ -33,11 +33,12 @@ def set_args():
 
     #experiment
     parser.add_argument('--text_size', default=512, type=int, help='text hidden size')
-    parser.add_argument('--image_size', default=512, type=int, help='image hidden size')
+    parser.add_argument('--image_size', default=224, type=int, help='image hidden size')
     parser.add_argument('--text_max_len', default=77, type=int, help='max length of text for clip')
     parser.add_argument('--seed', default=24, type=int, help='random seed')
     parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
     parser.add_argument('--device', default='0', type=str, help='device')
+    parser.add_argument('--label_number', default=2, type=int, help='number of labels')
 
     #data
     parser.add_argument('--labels', default=2, type=int, help='number of labels')

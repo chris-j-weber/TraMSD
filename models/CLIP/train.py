@@ -19,7 +19,7 @@ def train(args, train_data, val_data, test_data, model, processor, device):
         os.mkdir(args.output_dir)
 
     train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=True, num_workers=args.num_workers)
-    total_steps = int(len(train_loader) * args.num_train_epochs)
+    total_steps = int(len(train_loader) * args.num_train_epoches)
     model.to(device)
     
     clip_params = list(map(id, model.model.parameters()))
@@ -32,9 +32,9 @@ def train(args, train_data, val_data, test_data, model, processor, device):
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
 
     max_acc = 0.
-    for i_epoch in trange(0, int(args.num_train_epochs), desc='Epoch', disable=False):
-        sum_loss, sum_step = 0.
-        #sum_step = 0
+    for i_epoch in trange(0, int(args.num_train_epoches), desc='Epoch', disable=False):
+        sum_loss = 0.
+        sum_step = 0.
 
         iter_bar = tqdm(train_loader, desc='Iter (loss=X.XXX)', disable=False)
         model.train()

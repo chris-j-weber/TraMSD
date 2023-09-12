@@ -38,7 +38,8 @@ class CLIP(nn.Module):
             nn.GELU()
         )
         self.image_linear =  nn.Sequential(
-            nn.Linear(args.image_size, args.image_size),
+            #nn.Linear(args.image_size, args.image_size),
+            nn.Linear(768, args.image_size),
             nn.Dropout(args.dropout_rate),
             nn.GELU()
         )

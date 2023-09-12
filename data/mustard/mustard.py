@@ -26,6 +26,7 @@ for k in keys:
     scenes.append(k)
 
 final = pd.DataFrame(scenes)
+final['label'] = final['label'].astype(int)
 
 train_val, test = train_test_split(final, test_size=0.1)
 train, val = train_test_split(train_val, test_size=0.1)

@@ -3,3 +3,5 @@
 videos/
 img/
 checkpoints/
+__pycache__/
+*.pyc
