@@ -1,6 +1,62 @@
+#import wandb
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from sklearn import metrics
+from data.dataset import Mustard
+
+def accuracy_eval(args, model, device, data, processor, macro=False, pre=None, mode='test'):
+    data_loader = DataLoader(data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=False, num_workers=args.num_workers)
+    n_correct, n_total = 0, 0
+    t_targets_all, t_outputs_all = None, None
+
+    model.eval()
+    sum_loss = 0.
+    sum_step = 0
+    with torch.no_grad():
+        for i_batch, t_batch in enumerate(data_loader):
+            text_list, image_list, label_list, id_list = t_batch
+            inputs = processor(text=text_list, images=image_list, padding='max_length', truncation=True, max_length=args.text_max_len, return_tensors="pt").to(device)
+            labels = torch.tensor(label_list).to(device)
+            
+            t_targets = labels
+            loss, t_outputs = model(inputs,labels=labels)
+            sum_loss += loss.item()
+            sum_step += 1
+  
+            outputs = torch.argmax(t_outputs, -1)
+
+            n_correct += (outputs == t_targets).sum().item()
+            n_total += len(outputs)
+
+            if t_targets_all is None:
+                t_targets_all = t_targets
+                t_outputs_all = outputs
+            else:
+                t_targets_all = torch.cat((t_targets_all, t_targets), dim=0)
+                t_outputs_all = torch.cat((t_outputs_all, outputs), dim=0)
+    #if mode == 'test':
+        #wandb.log({'test_loss': sum_loss/sum_step})
+    #else:
+        #wandb.log({'val_loss': sum_loss/sum_step})
+    if pre != None:
+        with open(pre,'w',encoding='utf-8') as fout:
+            predict = t_outputs_all.cpu().numpy().tolist()
+            label = t_targets_all.cpu().numpy().tolist()
+            for x,y,z in zip(predict,label):
+                fout.write(str(x) + str(y) +z+ '\n')
+    if not macro:   
+        acc = n_correct / n_total
+        f1 = metrics.f1_score(t_targets_all.cpu(), t_outputs_all.cpu())
+        precision =  metrics.precision_score(t_targets_all.cpu(),t_outputs_all.cpu())
+        recall = metrics.recall_score(t_targets_all.cpu(),t_outputs_all.cpu())
+    else:
+        acc = n_correct / n_total
+        f1 = metrics.f1_score(t_targets_all.cpu(), t_outputs_all.cpu(), labels=[0, 1],average='macro')
+        precision =  metrics.precision_score(t_targets_all.cpu(),t_outputs_all.cpu(), labels=[0, 1],average='macro')
+        recall = metrics.recall_score(t_targets_all.cpu(),t_outputs_all.cpu(), labels=[0, 1],average='macro')
+    return acc, f1, precision, recall
 
 def similarity_matrix_training(text_embeddings, video_embeddings_pooled):
     text_embeddings = text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
