@@ -5,7 +5,7 @@ from config import Config
 
 class Loss(nn.Module):
     def __init__(self):
-        suprt().__init__()
+        super().__init__()
 
         def forward(self, sims, logit_scale):
             logit_scale = self.logit_scale.exp()

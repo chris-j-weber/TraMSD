@@ -2,11 +2,10 @@ import os
 import torch
 import logging
 #import wandb
-import numpy as np
+import torch.nn as nn
 from data.dataset import Mustard
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
-from sklearn import metrics
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 from utils.metrics import accuracy_eval
 
@@ -29,6 +28,8 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             {'params': base_params},
             {'params': model.model.parameters(),'lr': args.clip_lr}
             ], lr=args.lr, weight_decay=args.weight_decay)
+    
+    loss_function = nn.CrossEntropyLoss()
 
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
 
@@ -45,7 +46,19 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             inputs = processor(text=text_list, images=image_list, padding='max_length', truncation=True, max_length=args.text_max_len, return_tensors='pt').to(device)
             labels = torch.tensor(label_list).to(device)
 
-            loss, score = model(inputs,labels=labels)
+            #loss, score = model(inputs,labels=labels)
+            results = model(inputs,labels=labels)
+            logits_fused = results[1]
+            logits_text = results[2]
+            labels = results[3]
+
+            loss_fuse = loss_function(logits_fused, labels)
+            loss_text = loss_function(logits_text, labels)
+            #loss_image = self.loss_fct(logits_image, labels)
+            
+            #loss = loss_fuse + loss_text + loss_image
+            loss = loss_fuse + loss_text
+            
             sum_loss += loss.item()
             sum_step += 1
 
@@ -58,7 +71,8 @@ def train(args, train_data, val_data, test_data, model, processor, device):
         #wandb.log({'train_loss': sum_loss/sum_step})
         val_acc, val_f1 ,val_precision,val_recall = accuracy_eval(args, model, device, val_data, processor, mode='dev')
         #wandb.log({'val_acc': val_acc, 'val_f1': val_f1, 'val_precision': val_precision, 'val_recall': val_recall})
-        logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}, val_precision is {}, val_recall is {}".format(i_epoch, val_acc, val_f1, val_precision, val_recall))
+        #logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}, val_precision is {}, val_recall is {}".format(i_epoch, val_acc, val_f1, val_precision, val_recall))
+        logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}".format(i_epoch, val_acc, val_f1))
 
         if val_acc > max_acc:
             max_acc = val_acc
@@ -74,7 +88,8 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             #wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1,
             #         'macro_test_precision': test_precision,'macro_test_recall': test_recall, 'micro_test_f1': test_f1_,
             #         'micro_test_precision': test_precision_,'micro_test_recall': test_recall_})
-            logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, macro_test_precision is {}, macro_test_recall is {}, micro_test_f1 is {}, micro_test_precision is {}, micro_test_recall is {}".format(i_epoch, test_acc, test_f1, test_precision, test_recall, test_f1_, test_precision_, test_recall_))
+            #logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, macro_test_precision is {}, macro_test_recall is {}, micro_test_f1 is {}, micro_test_precision is {}, micro_test_recall is {}".format(i_epoch, test_acc, test_f1, test_precision, test_recall, test_f1_, test_precision_, test_recall_))
+            logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, micro_test_f1 is {}".format(i_epoch, test_acc, test_f1, test_f1_))
 
         torch.cuda.empty_cache()
     logger.info('Train done')
