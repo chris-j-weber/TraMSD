@@ -18,7 +18,7 @@ def set_args():
     #training
     parser.add_argument('--clip_lr', default=1e-6, type=float, help='learning rate for clip parameters')
     parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
-    parser.add_argument('--num_train_epoches', default=10, type=int, help='number of epochs')
+    parser.add_argument('--num_train_epoches', default=6, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
     parser.add_argument('--weight_decay', default=0.05, type=float, help='weight decay for regularization')
 
@@ -27,7 +27,7 @@ def set_args():
     parser.add_argument('--dropout_rate', default=0.3, type=float, help='dropout probability')
     parser.add_argument('--warmup_proportion', default=0.2, type=float, help='warmup proportion for learning rate scheduler')
     parser.add_argument('--epsilon_adam', default=1e-8, type=float, help='epsilon for adam optimizer')
-    parser.add_argument('--layers', default=5, type=int, help='number of transformer layers')
+    parser.add_argument('--layers', default=3, type=int, help='number of transformer layers')
     parser.add_argument('--embed_dim', default=512, type=int, help='dimensionality of the model embedding')
     parser.add_argument('--num_mha', default=8, type=int, help='number of multi head attentions')
 
