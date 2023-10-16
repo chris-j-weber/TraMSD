@@ -1,7 +1,7 @@
 import os
 import torch
 import logging
-#import wandb
+import wandb
 import torch.nn as nn
 from data.dataset import Mustard
 from torch.utils.data import DataLoader
@@ -68,9 +68,10 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             scheduler.step() 
             optimizer.zero_grad()
 
-        #wandb.log({'train_loss': sum_loss/sum_step})
+        wandb.log({'train_loss': sum_loss/sum_step})
         val_acc, val_f1 ,val_precision,val_recall = accuracy_eval(args, model, device, val_data, processor, mode='dev')
         #wandb.log({'val_acc': val_acc, 'val_f1': val_f1, 'val_precision': val_precision, 'val_recall': val_recall})
+        wandb.log({'val_acc': val_acc, 'val_f1': val_f1})
         #logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}, val_precision is {}, val_recall is {}".format(i_epoch, val_acc, val_f1, val_precision, val_recall))
         logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}".format(i_epoch, val_acc, val_f1))
 
@@ -85,9 +86,8 @@ def train(args, train_data, val_data, test_data, model, processor, device):
 
             test_acc, test_f1,test_precision,test_recall = accuracy_eval(args, model, device, test_data, processor, macro=True, mode='test')
             _, test_f1_,test_precision_,test_recall_ = accuracy_eval(args, model, device, test_data, processor, mode='test')
-            #wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1,
-            #         'macro_test_precision': test_precision,'macro_test_recall': test_recall, 'micro_test_f1': test_f1_,
-            #         'micro_test_precision': test_precision_,'micro_test_recall': test_recall_})
+            #wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1, 'macro_test_precision': test_precision,'macro_test_recall': test_recall, 'micro_test_f1': test_f1_, 'micro_test_precision': test_precision_,'micro_test_recall': test_recall_})
+            wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1, 'micro_test_f1': test_f1_})
             #logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, macro_test_precision is {}, macro_test_recall is {}, micro_test_f1 is {}, micro_test_precision is {}, micro_test_recall is {}".format(i_epoch, test_acc, test_f1, test_precision, test_recall, test_f1_, test_precision_, test_recall_))
             logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, micro_test_f1 is {}".format(i_epoch, test_acc, test_f1, test_f1_))
 

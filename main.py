@@ -3,7 +3,7 @@ import argparse
 import torch
 import random
 import numpy as np
-#import wandb
+import wandb
 from data.dataset import Mustard
 from models.CLIP.model import CLIP
 from models.CLIP.train import train
@@ -18,7 +18,7 @@ def set_args():
     #training
     parser.add_argument('--clip_lr', default=1e-6, type=float, help='learning rate for clip parameters')
     parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
-    parser.add_argument('--num_train_epoches', default=6, type=int, help='number of epochs')
+    parser.add_argument('--num_train_epoches', default=8, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
     parser.add_argument('--weight_decay', default=0.05, type=float, help='weight decay for regularization')
 
@@ -47,6 +47,7 @@ def set_args():
     parser.add_argument('--video_sample_type', default='uniform', type=str, help='video sample type')
     parser.add_argument('--input_res', default=224, type=int, help='input resolution for videos')
     parser.add_argument('--output_dir', default='./output_dir', type=str, help='output path')
+    parser.add_argument('--log_dir', default='./log_dir', type=str, help='log path')
 
     #parser.add_argument('--', default=, type=, help='')
 
@@ -61,6 +62,12 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
     device = torch.device("cuda" if torch.cuda.is_available() and int(args.device) >= 0 else "cpu")
 
+    if not os.path.exists(args.log_dir):
+        os.mkdir(args.log_dir)
+    else:
+        os.rmdir(args.log_dir)
+        os.mkdir(args.log_dir)
+
     if args.seed is not None and args.seed >= 0:
         random.seed(args.seed)
         os.environ['PYTHONHASHSEED'] = str(args.seed)
@@ -71,8 +78,8 @@ def main():
         torch.backends.cudnn.deterministic = True
         #torch.backends.cudnn.benchmark = False
 
-    #wandb.init(project='mmtsarcasm', notes='mmt', tags=['mmt'], config=vars(args))
-    #wandb.watch_called = False
+    wandb.init(project='mmtsarcasm', notes='mmt', tags=['mmt'], config=vars(args))
+    wandb.watch_called = False
 
     train_data = Mustard(mode='train')
     val_data = Mustard(mode='val')
@@ -82,7 +89,7 @@ def main():
     model = CLIP(args)
 
     model.to(device)
-    #wandb.watch(model, log='all')
+    wandb.watch(model, log='all')
 
     train(args, train_data, val_data, test_data, model, processor, device)
 

@@ -1,4 +1,4 @@
-#import wandb
+import wandb
 import numpy as np
 import torch
 import torch.nn as nn
@@ -47,10 +47,10 @@ def accuracy_eval(args, model, device, data, processor, macro=False, pre=None, m
             else:
                 all_targets = torch.cat((all_targets, targets), dim=0)
                 all_outputs = torch.cat((all_outputs, outputs), dim=0)
-    #if mode == 'test':
-        #wandb.log({'test_loss': sum_loss/sum_step})
-    #else:
-        #wandb.log({'val_loss': sum_loss/sum_step})
+    if mode == 'test':
+        wandb.log({'test_loss': sum_loss/sum_step})
+    else:
+        wandb.log({'val_loss': sum_loss/sum_step})
     if pre != None:
         with open(pre,'w',encoding='utf-8') as fout:
             predict = all_outputs.cpu().numpy().tolist()

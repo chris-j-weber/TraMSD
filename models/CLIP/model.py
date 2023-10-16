@@ -92,6 +92,7 @@ class CLIP(nn.Module):
         # extract hidden state embeddings
         txt_embeddings = self.model.text_projection(txt)
         img_embeddings = self.model.visual_projection(img)
+        img_embeddings = img_embeddings.reshape(-1, 4, *img_embeddings.shape[1:]).mean(dim=1)
         
         # concatenate both embeddings
         input_embeddings = torch.cat((img_embeddings, txt_embeddings), dim=1)
