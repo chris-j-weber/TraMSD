@@ -1,5 +1,5 @@
-import os
 import cv2
+import random
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -35,12 +35,27 @@ train.to_csv('train_mustard.csv', index=False)
 test.to_csv('test_mustard.csv', index=False)
 val.to_csv('val_mustard.csv', index=False)
 
+num_frames = 4
 for sc in scenes:
-    cam = cv2.VideoCapture('videos/final_utterance_videos/'+sc['image']+'.mp4')
+  vidpath = 'data/mustard/videos/final_utterance_videos/'+sc['image']+'.mp4'
+  cam = cv2.VideoCapture(vidpath)
+  total_frames = int(cam.get(cv2.CAP_PROP_FRAME_COUNT))
+  video_id = sc['image']
+
+  acc_samples = min(num_frames, total_frames)
+
+  random_frame_idxs = random.sample(range(total_frames), acc_samples)
+
+  for frame_idx in sorted(random_frame_idxs):
+    cam.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
 
     ret, frame = cam.read()
-    if ret:
-        cv2.imwrite('img/'+sc['image']+'.jpg', frame)
+    if not ret:
+      print(f'frame {frame_idx} could not be read')
+      continue
 
-    cam.release()
-    cv2.destroyAllWindows()
+    output_filename = f'data/mustard/frames/{video_id}_{frame_idx}.jpg'
+    cv2.imwrite(output_filename, frame)
+
+  cam.release()
+  cv2.destroyAllWindows()

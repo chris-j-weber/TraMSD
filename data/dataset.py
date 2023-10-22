@@ -5,7 +5,7 @@ import torch
 import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
-from mustard.capture_frames import capture_frames, image_transforms
+from data.mustard.image_transform import image_transforms
 
 logger = logging.getLogger(__name__)
 
