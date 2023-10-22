@@ -18,7 +18,11 @@ def train(args, train_data, val_data, test_data, model, processor, device):
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
 
-    train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=True, num_workers=args.num_workers)
+    if args.model == 'fusion':
+        train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=True, num_workers=args.num_workers)
+    else:
+        # train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=True, num_workers=args.num_workers, drop_last=True)
+        train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=True, num_workers=args.num_workers)
     total_steps = int(len(train_loader) * args.num_train_epoches)
     model.to(device)
     
@@ -46,19 +50,29 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             inputs = processor(text=text_list, images=image_list, padding='max_length', truncation=True, max_length=args.text_max_len, return_tensors='pt').to(device)
             labels = torch.tensor(label_list).to(device)
 
-            #loss, score = model(inputs,labels=labels)
-            results = model(inputs,labels=labels)
-            logits_fused = results[1]
-            logits_text = results[2]
-            labels = results[3]
+            res = model(inputs,labels=labels)
+            if args.model == 'fusion':
+                ###### model_V1 #####
+                logits_fused = res[1]
+                logits_text = res[2]
+                labels = res[3]
 
-            loss_fuse = loss_function(logits_fused, labels)
-            loss_text = loss_function(logits_text, labels)
-            #loss_image = self.loss_fct(logits_image, labels)
-            
-            #loss = loss_fuse + loss_text + loss_image
-            loss = loss_fuse + loss_text
-            
+                loss_fuse = loss_function(logits_fused, labels)
+                loss_text = loss_function(logits_text, labels)
+                loss = loss_fuse + loss_text
+                ########
+            else:
+                ##### model_V2 #####
+                logits_output = res[0]
+                # video_features_pooled = res[1]
+                score = res[1]
+                labels = res[2]
+                logits_output = logits_output.view(-1, 2)
+                labels = labels.repeat(4)
+                loss_output = loss_function(logits_output, labels)
+                loss = loss_output
+                ########
+
             sum_loss += loss.item()
             sum_step += 1
 
@@ -68,10 +82,10 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             scheduler.step() 
             optimizer.zero_grad()
 
-        wandb.log({'train_loss': sum_loss/sum_step})
+        # wandb.log({'train_loss': sum_loss/sum_step})
         val_acc, val_f1 ,val_precision,val_recall = accuracy_eval(args, model, device, val_data, processor, mode='dev')
         #wandb.log({'val_acc': val_acc, 'val_f1': val_f1, 'val_precision': val_precision, 'val_recall': val_recall})
-        wandb.log({'val_acc': val_acc, 'val_f1': val_f1})
+        # wandb.log({'val_acc': val_acc, 'val_f1': val_f1})
         #logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}, val_precision is {}, val_recall is {}".format(i_epoch, val_acc, val_f1, val_precision, val_recall))
         logging.info("i_epoch is {}, val_acc is {}, val_f1 is {}".format(i_epoch, val_acc, val_f1))
 
@@ -84,10 +98,10 @@ def train(args, train_data, val_data, test_data, model, processor, device):
             model_to_save = (model.module if hasattr(model, "module") else model)
             torch.save(model_to_save.state_dict(), os.path.join(path_to_save, 'model.pt'))
 
-            test_acc, test_f1,test_precision,test_recall = accuracy_eval(args, model, device, test_data, processor, macro=True, mode='test')
+            test_acc, test_f1,test_precision,test_recall = accuracy_eval(args, model, device, test_data, processor,macro = True, mode='test')
             _, test_f1_,test_precision_,test_recall_ = accuracy_eval(args, model, device, test_data, processor, mode='test')
             #wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1, 'macro_test_precision': test_precision,'macro_test_recall': test_recall, 'micro_test_f1': test_f1_, 'micro_test_precision': test_precision_,'micro_test_recall': test_recall_})
-            wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1, 'micro_test_f1': test_f1_})
+            # wandb.log({'test_acc': test_acc, 'macro_test_f1': test_f1, 'micro_test_f1': test_f1_})
             #logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, macro_test_precision is {}, macro_test_recall is {}, micro_test_f1 is {}, micro_test_precision is {}, micro_test_recall is {}".format(i_epoch, test_acc, test_f1, test_precision, test_recall, test_f1_, test_precision_, test_recall_))
             logging.info("i_epoch is {}, test_acc is {}, macro_test_f1 is {}, micro_test_f1 is {}".format(i_epoch, test_acc, test_f1, test_f1_))
 

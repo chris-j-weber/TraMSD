@@ -8,7 +8,12 @@ from sklearn import metrics
 from data.dataset import Mustard
 
 def accuracy_eval(args, model, device, data, processor, macro=False, pre=None, mode='test'):
-    data_loader = DataLoader(data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=False, num_workers=args.num_workers)
+    if args.model == 'fusion':
+        data_loader = DataLoader(data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=False, num_workers=args.num_workers)
+    else:
+        # data_loader = DataLoader(data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=False, num_workers=args.num_workers, drop_last=True)
+        data_loader = DataLoader(data, batch_size=args.batch_size, collate_fn=Mustard.collate_func, shuffle=False, num_workers=args.num_workers)
+    
     n_correct, n_total = 0, 0
     all_targets, all_outputs = None, None
 
@@ -24,14 +29,26 @@ def accuracy_eval(args, model, device, data, processor, macro=False, pre=None, m
             inputs = processor(text=text_list, images=image_list, padding='max_length', truncation=True, max_length=args.text_max_len, return_tensors="pt").to(device)
             labels = torch.tensor(label_list).to(device)
             
-            score, logits_fused, logits_text, targets = model(inputs,labels=labels)
+            targets = labels
+            # loss, t_outputs = model(inputs,labels=labels)
+            if args.model == 'fusion':
+                ##### model_V1 #####
+                score, logits_fused, logits_text, targets = model(inputs,labels=labels)
 
-            loss_fuse = loss_function(logits_fused, labels)
-            loss_text = loss_function(logits_text, labels)
-            #loss_image = self.loss_fct(logits_image, labels)
-            
-            #loss = loss_fuse + loss_text + loss_image
-            loss = loss_fuse + loss_text
+                loss_fuse = loss_function(logits_fused, labels)
+                loss_text = loss_function(logits_text, labels)
+                loss = loss_fuse + loss_text
+                ########
+            else:
+                ##### model_V2 #####
+                logits, score, labels = model(inputs,labels=labels)
+
+                logits = logits.view(-1, 2)
+                labels = labels.repeat(4)
+
+                loss_output = loss_function(logits, labels)
+                loss = loss_output
+                ########
 
             sum_loss += loss.item()
             sum_step += 1
@@ -47,10 +64,10 @@ def accuracy_eval(args, model, device, data, processor, macro=False, pre=None, m
             else:
                 all_targets = torch.cat((all_targets, targets), dim=0)
                 all_outputs = torch.cat((all_outputs, outputs), dim=0)
-    if mode == 'test':
-        wandb.log({'test_loss': sum_loss/sum_step})
-    else:
-        wandb.log({'val_loss': sum_loss/sum_step})
+    # if mode == 'test':
+    #     wandb.log({'test_loss': sum_loss/sum_step})
+    # else:
+    #     wandb.log({'val_loss': sum_loss/sum_step})
     if pre != None:
         with open(pre,'w',encoding='utf-8') as fout:
             predict = all_outputs.cpu().numpy().tolist()

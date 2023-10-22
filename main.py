@@ -6,6 +6,7 @@ import numpy as np
 import wandb
 from data.dataset import Mustard
 from models.CLIP.model import CLIP
+from models.CLIP.modelV2 import CLIPTransformer
 from models.CLIP.train import train
 from transformers import CLIPProcessor
 
@@ -15,6 +16,9 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 def set_args():
     parser = argparse.ArgumentParser()
     
+    #model architecture 'fusion' or 'qkv'
+    parser.add_argument('--model', default='qkv', type=str, help='choose which model')
+
     #training
     parser.add_argument('--clip_lr', default=1e-6, type=float, help='learning rate for clip parameters')
     parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
@@ -86,7 +90,12 @@ def main():
     test_data = Mustard(mode='test')
 
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    model = CLIP(args)
+    if args.model == 'fusion':
+        ##### model_V1 #####
+        model = CLIP(args)
+    else:
+        ##### model_V2 #####
+        model = CLIPTransformer(args)
 
     model.to(device)
     wandb.watch(model, log='all')
