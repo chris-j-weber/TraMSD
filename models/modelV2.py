@@ -28,8 +28,6 @@ class MHA(nn.Module):
         
         # num_heads x head_dim x num_texts
         q = q.permute(1,2,0)
-        #q = q.mean(dim=1)
-        #q = q.permute(1, 2, 0)
 
         num_vids, num_frames, _ = image_embeds.shape
         
@@ -61,7 +59,6 @@ class MHA(nn.Module):
 
         # num_vids x num_texts x embed_dim
         o = self.out_proj(attention)
-        # o = o.mean(dim=1)
 
         return o
 
@@ -70,14 +67,9 @@ class CLIPTransformer(nn.Module):
     def __init__(self, args):
         super(CLIPTransformer, self).__init__()
         self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        # self.config = BertConfig.from_pretrained("bert-base-uncased")
-        # self.config.hidden_size = 512
-        # self.config.num_attention_heads = args.num_mha
         
         self.embed_dim = args.embed_dim
         dropout = args.dropout_rate
-
-        self.cross_attn = MHA(args)
 
         self.linear_proj = nn.Linear(self.embed_dim, self.embed_dim)
         self.img_linear = nn.Linear(768, self.embed_dim)
@@ -95,17 +87,14 @@ class CLIPTransformer(nn.Module):
         model_outputs = self.model(**inputs,output_attentions=True)
 
         txt_embed = model_outputs.text_embeds
-        print('txt_embed', txt_embed, ' shape: ', txt_embed.shape)
+        
         img_embed = model_outputs.image_embeds
         img_embed = img_embed.reshape(4, 4, -1)
-        print('img_embed', img_embed)
+        
         video_features_pooled = self.pooling(txt_embed, img_embed)
-        print('video_features_pooled', video_features_pooled)
         logits = self.classifier(video_features_pooled)
-        print('logits', logits)
         score = nn.functional.softmax(logits, dim=-1)
-        print('score', score, ' shape: ', score.shape)
-        # return logits, video_features_pooled, score, labels
+        
         return logits, score, labels
     
 
@@ -149,26 +138,14 @@ class Transformer(nn.Module):
         """
         text_embeds = self.layer_norm1(text_embeds)
 
-        # print('video embeds shape: ', video_embeds.shape)
-        # batch_size, num_frames, _ = video_embeds.shape
-        # video_embeds = self.proj_layer(video_embeds.view(-1, 640)).view(batch_size, num_frames, 512)
         batch_size, num_frames, feature_size = video_embeds.shape
-        #print('video embeds shape: ', batch_size)
-        #print('video embeds shape: ', num_frames)
-        #print('video embeds shape: ', feature_size)
-        #assert feature_size * num_frames == 640, "Ensure total feature size is 640"
-        #video_embeds = self.proj_layer(video_embeds.view(batch_size * num_frames, feature_size)).view(batch_size, num_frames, 512)
 
         if feature_size == 640:
             video_embeds = self.proj_layer(video_embeds.view(-1, 640)).view(batch_size, num_frames, 512)
         else:
             video_embeds = self.proj_layer_2(video_embeds.view(-1, 384)).view(batch_size, num_frames, 512)
         video_embeds = self.layer_norm1(video_embeds)
-        # print('video embeds shape final: ', video_embeds.shape)
 
-        # num_vids x num_texts x embed_dim
-        #print('text embed transfromer: ', text_embeds.shape)
-        #print('video embed transfromer: ', video_embeds.shape)
         attn_out = self.cross_attn(text_embeds, video_embeds)
         attn_out = self.layer_norm2(attn_out)
 
