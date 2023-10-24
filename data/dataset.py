@@ -18,7 +18,7 @@ class Mustard(Dataset):
         cnt = 0
         data_set = dict()
         if mode in ['train']:
-            df = pd.read_csv('data/mustard/'+mode+'_debug_mustard.csv')
+            df = pd.read_csv('data/mustard/'+mode+'_mustard.csv')
             for index, row in df.iterrows():
                 if limit != None and cnt >= limit:
                     break
@@ -33,7 +33,7 @@ class Mustard(Dataset):
                     cnt += 1
         
         if mode in ['test','val']:
-            df = pd.read_csv('data/mustard/'+mode+'_debug_mustard.csv')
+            df = pd.read_csv('data/mustard/'+mode+'_mustard.csv')
             for index, row in df.iterrows():
                 image = row['image']
                 sentence = row['sentence']
@@ -46,23 +46,13 @@ class Mustard(Dataset):
 
         return data_set
 
-    def image_loader(self, id):
-        # video_path = 'data/mustard/videos/final_utterance_videos/'+id+'.mp4'
-        # frames = capture_frames(id, video_path, 4)
-        res = image_transforms(id)
-        return res
-    
-    def text_loader(self, id):
-        return self.data[id]['text']
 
     def __getitem__(self, index):
         id = self.image_ids[index]
-        text = self.text_loader(id)
-        #text = self.data[id]['text']
-        image_feature = self.image_loader(id)
-        #image_feature = Image.open(self.data[id]['image_path'])
+        text = self.data[id]['text']
+        video = image_transforms(id)
         label = self.data[id]['label']
-        return text, image_feature, label, id
+        return text, video, label, id
 
     def __len__(self):
         return len(self.image_ids)
@@ -74,19 +64,18 @@ class Mustard(Dataset):
         if batch_size == 0:
             return {}
 
-        text_list = []
-        image_list = []
-        label_list = []
+        text = []
+        videos = []
+        labels = []
         id_list = []
         for instance in batch_data:
-            text_list.append(instance[0])
-            # image_list.append(instance[1])
-            image_list.extend(instance[1])
-            label_list.append(instance[2])
+            text.append(instance[0])
+            videos.append(instance[1])
+            # videos.extend(instance[1])
+            labels.append(instance[2])
             id_list.append(instance[3])
 
-        # Convert lists to tensors as needed
-        image_tensor = torch.stack(image_list, dim=0)
-        
-        # return text_list, image_list, label_list, id_list
-        return text_list, image_tensor, label_list, id_list
+        # Convert lists to tensors
+        image_tensor = torch.stack(videos, dim=0)
+
+        return text, image_tensor, labels, id_list
