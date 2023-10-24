@@ -1,10 +1,11 @@
 .DS_Store
 .vscode/
-videos/
 img/
-frames/
 checkpoints/
 __pycache__/
 *.pyc
 output_dir/
 log_dir/
+*jpg
+final_context_videos/
+final_utterance_videos/
