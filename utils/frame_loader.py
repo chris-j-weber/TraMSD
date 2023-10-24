@@ -4,7 +4,7 @@ from PIL import Image
 from torchvision import transforms
 from torchvision.transforms import functional as F
 
-def image_transforms(video_id):
+def frame_loader(video_id):
     frames = []
     processed_frames = []
     folder_path = 'data/mustard/frames'

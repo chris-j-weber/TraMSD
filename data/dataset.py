@@ -5,7 +5,7 @@ import torch
 import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
-from data.mustard.image_transform import image_transforms
+from utils.frame_loader import frame_loader
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class Mustard(Dataset):
     def __getitem__(self, index):
         id = self.image_ids[index]
         text = self.data[id]['text']
-        video = image_transforms(id)
+        video = frame_loader(id)
         label = self.data[id]['label']
         return text, video, label, id
 
