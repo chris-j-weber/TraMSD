@@ -1,129 +1,115 @@
-import copy
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from transformers import CLIPModel, BertConfig
-from transformers.models.bert.modeling_bert import BertLayer
+from transformers import CLIPModel
 
-class Encoder(nn.Module):
-    def __init__(self, config, layer_number):
-        super(Encoder, self).__init__()
-        layer = BertLayer(config)
-        self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(layer_number)])
 
-    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):
-        all_encoder_layers = []
-        all_encoder_attentions = []
-        for layer_module in self.layer:
-            hidden_states, attention = layer_module(hidden_states, attention_mask, output_attentions=True)
-            all_encoder_attentions.append(attention)
-            if output_all_encoded_layers:
-                all_encoder_layers.append(hidden_states)
-        if not output_all_encoded_layers:
-            all_encoder_layers.append(hidden_states)
-        return all_encoder_layers, all_encoder_attentions
-
-class CLIP(nn.Module):
+class TextModel(nn.Module):
     def __init__(self, args):
-        super(CLIP, self).__init__()
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        self.config = BertConfig.from_pretrained("bert-base-uncased")
-        self.config.hidden_size = 512
-        self.config.num_attention_heads = args.num_mha
-        self.encoding = Encoder(self.config, layer_number=args.layers)
+        super(TextModel, self).__init__()
+        self.args = args
 
-        self.text_linear =  nn.Sequential(
-            nn.Linear(args.text_size, args.text_size),
-            nn.Dropout(args.dropout_rate),
-            nn.GELU()
-        )
-        self.image_linear =  nn.Sequential(
-            nn.Linear(768, args.image_size),
-            nn.Dropout(args.dropout_rate),
-            nn.GELU()
-        )
+        self.model = CLIPModel.from_pretrained(args.pretrained_model)
 
-        self.classifier_fuse = nn.Linear(args.text_size , args.label_number)
-        self.classifier_text = nn.Linear(args.text_size, args.label_number)
-        self.classifier_image = nn.Linear(args.image_size, args.label_number)
+        self.text_embed_dim = self.model.text_embed_dim
 
-        self.loss_fct = nn.CrossEntropyLoss()
-        self.att = nn.Linear(args.text_size, 1, bias=False)
+        self.classification_head = nn.Linear(self.text_embed_dim, self.args.label_number)
 
-    def forward(self, inputs, labels):
-        modeling_outputs = self.model(**inputs,output_attentions=True)
+    def forward(self, inputs):
+        model_outputs = self.model(**inputs, output_attentions=True)
+
+        # get text cls token
+        text_model_output = model_outputs.text_model_output
+        text_cls_token = text_model_output['pooler_output']
         
-        txt_features, img_features, txt_cls, img_cls = self.extract_features(modeling_outputs)
-        input_embeddings, extended_attention_mask = self.build_attention(inputs, txt_features, img_features)
-        fused_feature = self.extract_fused_features(inputs, input_embeddings, extended_attention_mask)
+        # classification head
+        output = self.classification_head(text_cls_token)        
 
-        logits_fused = self.classifier_fuse(fused_feature)
-        logits_text = self.classifier_text(txt_cls)
-        #logits_image = self.classifier_image(img_cls)
-   
-        fuse_score = nn.functional.softmax(logits_fused, dim=-1)
-        text_score = nn.functional.softmax(logits_text, dim=-1)
-        #image_score = nn.functional.softmax(logits_image, dim=-1)
+        # return logits
+        return output
 
-        #score = fuse_score + text_score + image_score
-        score = fuse_score + text_score
 
-        #outputs = (score, logits_fused, logits_text, logits_image, labels)
-        outputs = (score, logits_fused, logits_text, labels)
+class FusionModel(nn.Module):
+    def __init__(self, args):
+        super(FusionModel, self).__init__()
+        self.args = args
+
+        self.model = CLIPModel.from_pretrained(args.pretrained_model)
+
+        self.text_embed_dim = self.model.text_embed_dim
+        self.vision_embed_dim = self.model.vision_embed_dim
+        self.fusion_embed_dim = self.text_embed_dim + self.vision_embed_dim
+
+        self.classification_head = nn.Linear(self.fusion_embed_dim, self.args.label_number)
+
+    def forward(self, inputs):
+        model_outputs = self.model(**inputs, output_attentions=True)
+
+        # get text cls token
+        text_model_output = model_outputs.text_model_output
+        text_cls_token = text_model_output['pooler_output']
+
+        # get vision cls token
+        vision_model_output = model_outputs.vision_model_output
+        batch_size = text_model_output[0].shape[0]
+        nb_tokens = vision_model_output[0].shape[-2]
+        embed_dim = vision_model_output[0].shape[-1]
+        vision_model_output_video = vision_model_output[0].reshape(batch_size, -1, nb_tokens, embed_dim)
+        frames_cls_token = vision_model_output_video[..., 0, :] # cls token of all frames
+
+        num_frames = vision_model_output_video.shape[1]
+        # average cls token of all frames per video
+        video_cls_token = frames_cls_token.sum(dim=1) / num_frames 
+
+        # concatenate text cls token and video cls token
+        fusion_token = torch.cat((text_cls_token, video_cls_token), dim=1)
         
-        return outputs
+        # classification head
+        output = self.classification_head(fusion_token)        
+
+        # return logits
+        return output
     
-    def extract_features(self, modeling_outputs):
-        # extract image and text sequences at the output of the last layer
-        text_features = modeling_outputs['text_model_output']['last_hidden_state']
-        image_features = modeling_outputs['vision_model_output']['last_hidden_state']
-        
-        # extract classification tokens (after processing through a linear layer and a tanh activation)
-        text_cls = modeling_outputs['text_model_output']['pooler_output']
-        image_cls = modeling_outputs['vision_model_output']['pooler_output']
-        
-        # apply linear function 
-        text_cls = self.text_linear(text_cls)
-        image_cls = self.image_linear(image_cls)
-        
-        return text_features, image_features, text_cls, image_cls
-    
-    def build_attention(self, inputs, txt, img):
-        # extract hidden state embeddings
-        txt_embeddings = self.model.text_projection(txt)
-        img_embeddings = self.model.visual_projection(img)
-        img_embeddings = img_embeddings.reshape(-1, 4, *img_embeddings.shape[1:]).mean(dim=1)
-        
-        # concatenate both embeddings
-        input_embeddings = torch.cat((img_embeddings, txt_embeddings), dim=1)
-        
-        # build attention mask
-        attention_mask = torch.cat((torch.ones(txt.shape[0], 50).to(txt.device), inputs['attention_mask']), dim=-1)
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-        extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)
-        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        return input_embeddings, extended_attention_mask
-    
-    def extract_fused_features(self, inputs, embeddings, attentions):
-        # encode concatenated embeddings
-        fused_hidden_states, all_attentions = self.encoding(embeddings, attentions, output_all_encoded_layers=False)
-        fused_hidden_states = fused_hidden_states[-1]
-       
-        # extract new features
-        new_text_features = fused_hidden_states[:, 50:, :]
-        new_text_feature = new_text_features[
-            torch.arange(new_text_features.shape[0], device=inputs['input_ids'].device), inputs['input_ids'].to(torch.int).argmax(dim=-1)
-        ]
-        new_image_feature = fused_hidden_states[:, 0, :].squeeze(1)
+class CrossAttentionModel(nn.Module):
+    def __init__(self, args):
+        super(CrossAttentionModel, self).__init__()
+        self.args = args
 
-        # apply key-less attention
-        text_weight = self.att(new_text_feature)
-        image_weight = self.att(new_image_feature)    
-        att = nn.functional.softmax(torch.stack((text_weight, image_weight), dim=-1),dim=-1)
-        tw, iw = att.split([1,1], dim=-1)
+        self.model = CLIPModel.from_pretrained(args.pretrained_model)
 
-        # fused cls feature
-        fuse_feature = tw.squeeze(1) * new_text_feature + iw.squeeze(1) * new_image_feature
-       
-        return fuse_feature
+        self.text_embed_dim = self.model.text_embed_dim
+        self.vision_embed_dim = self.model.vision_embed_dim
+
+        self.vision_projector = nn.Linear(self.vision_embed_dim, self.text_embed_dim)
+        self.cross_attention = nn.MultiheadAttention(embed_dim=self.text_embed_dim, num_heads=self.args.num_heads_ca, batch_first=True)
+
+        self.classification_head = nn.Linear(self.text_embed_dim, self.args.label_number)
+
+    def forward(self, inputs):
+        model_outputs = self.model(**inputs, output_attentions=True)
+
+        # get text cls token
+        text_model_output = model_outputs.text_model_output
+        text_cls_token = text_model_output['pooler_output'].unsqueeze(dim=1)
+
+        # get vision cls token
+        vision_model_output = model_outputs.vision_model_output
+        batch_size = text_model_output[0].shape[0]
+        nb_tokens = vision_model_output[0].shape[-2]
+        embed_dim = vision_model_output[0].shape[-1]
+        vision_model_output_video = vision_model_output[0].reshape(batch_size, -1, nb_tokens, embed_dim)
+        frames_cls_token = vision_model_output_video[..., 0, :] # cls token of all frames
+
+        # compute cross attention between text cls token (query) and frame cls tokens (key, value)
+        frames_cls_token = torch.flatten(frames_cls_token, start_dim=0, end_dim=1)
+        projected_frames_cls_token = self.vision_projector(frames_cls_token)
+        projected_frames_cls_token = projected_frames_cls_token.reshape(batch_size, -1, self.text_embed_dim)
+
+        ca_token, _ = self.cross_attention(text_cls_token, projected_frames_cls_token, projected_frames_cls_token)
+        ca_token = ca_token.squeeze()
+
+        # classification head
+        output = self.classification_head(ca_token)        
+
+        # return logits
+        return output
