@@ -36,4 +36,4 @@ def evaluate(args, model, device, data, processor):
     auc = metrics.roc_auc_score(target.cpu(), np.array(prob)[:, 1])
     f1 = metrics.f1_score(target.cpu(), y_pred, pos_label=1)
 
-    return epoch_loss, y_pred, acc, auc, f1
+    return epoch_loss, acc, auc, f1
