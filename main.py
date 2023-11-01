@@ -23,6 +23,7 @@ def set_args():
     parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
     parser.add_argument('--weight_decay', default=0.2, type=float, help='weight decay for regularization')
     parser.add_argument('--warmup_proportion', default=0.1, type=float, help='warmup proportion for learning rate scheduler')
+    parser.add_argument('--dropout_rate', default=0.2, type=float, help='dropout probability')
 
     ## model
     parser.add_argument('--pretrained_model', default="openai/clip-vit-base-patch32", type=str, help="load pretrained model")
@@ -104,9 +105,6 @@ def main():
     wandb.watch(model, log='all')
 
     train(args, model, device)
-    
-    test(args, model, device)
-
     #torch.cuda.empty_cache()
 
 if __name__ == '__main__':

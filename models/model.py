@@ -39,7 +39,12 @@ class FusionModel(nn.Module):
         self.vision_embed_dim = self.model_vision.config.hidden_size
         self.fusion_embed_dim = self.text_embed_dim + self.vision_embed_dim
 
-        self.classification_head = nn.Linear(self.fusion_embed_dim, self.args.label_number)
+        self.classification_head = nn.Sequential(
+            nn.Linear(self.fusion_embed_dim, 256),
+            nn.Dropout(p=args.dropout_rate),
+            nn.ReLU(),
+            nn.Linear(256, self.args.label_number)
+        )
 
     def forward(self, text_input, video_input, lengths):  
         text_model_output = self.model_text(**text_input, output_attentions=False)

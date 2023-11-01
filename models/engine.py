@@ -24,7 +24,6 @@ def train(args, model, device):
     vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
 
     if args.model in ['fusion', 'cross_attention']:
-        # vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
         train_data = MustardVideoText(args, device, args.path_to_pt+'video_train.pt', args.path_to_pt+'text_train.pt', args.path_to_pt+'labels_train.pt', args.path_to_pt+'ids_train.pt')
         val_data = MustardVideoText(args, device, args.path_to_pt+'video_val.pt', args.path_to_pt+'text_val.pt', args.path_to_pt+'labels_val.pt', args.path_to_pt+'ids_val.pt')
         train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=MustardVideoText.collate_func, shuffle=True, num_workers=args.num_workers)
@@ -106,7 +105,7 @@ def train(args, model, device):
 
             running_loss += loss.item()
 
-        # stats
+        ## stats
         epoch_loss = running_loss / len(train_loader)
         
         targets = torch.tensor(targets).to(device)
@@ -115,18 +114,14 @@ def train(args, model, device):
         auc = metrics.roc_auc_score(targets.cpu(), np.array(prob)[:, 1])
         f1 = metrics.f1_score(targets.cpu(), y_pred, pos_label=1)
 
-        # train results
-        # wandb.log({'train_loss': epoch_loss, 'train_acc': acc, 'train_f1': f1, 'train_auc': auc})
+        ## train results
+        wandb.log({'train_loss': epoch_loss, 'train_acc': acc, 'train_f1': f1, 'train_auc': auc})
         logging.info('i_epoch is {}, train_loss is {}, train_acc is {}, train_f1 is {}, train_auc is {}'.format(i_epoch, epoch_loss, acc, f1, auc))
 
-        # validation results
+        ## validation results
         validation_acc = validate(args, model, device, val_data, text_processor, vision_processor)
 
-        # val_epoch, validation_acc, validation_f1, validation_auc = evaluate(args, model, device, val_data, processor)
-        # wandb.log({'validation_acc': validation_acc, 'validation_f1': validation_f1, 'validation_auc': validation_auc})
-        # logging.info('i_epoch is {}, validation_acc is {}, validation_f1 is {}, validation_auc is {}'.format(i_epoch, validation_acc, validation_f1, validation_auc))
-
-        # save best model
+        ## save best model
         if validation_acc > max_accuracy:
             max_accuracy = validation_acc
 
@@ -144,8 +139,8 @@ def train(args, model, device):
             output_dir = os.path.join(args.model_output_directory, checkpoint_file)
             torch.save(dict_to_save, output_dir)
 
-    # torch.cuda.empty_cache()
     logger.info('Train done')
+    test(args, model, device, text_processor, vision_processor)
 
 def validate(args, model, device, val_data, text_processor, vision_processor):
     model.eval()
@@ -157,17 +152,15 @@ def validate(args, model, device, val_data, text_processor, vision_processor):
         val_loader = DataLoader(val_data, batch_size=args.batch_size, collate_fn=MustardText.collate_func, shuffle=False, num_workers=args.num_workers)
 
     val_epoch_loss, validation_acc, validation_f1, validation_auc = evaluate(args, model, device, criterion, val_loader, text_processor, vision_processor)
-    # wandb.log({'validation_acc': validation_acc, 'validation_f1': validation_f1, 'validation_auc': validation_auc})
+    wandb.log({'val_acc': validation_acc, 'val_f1': validation_f1, 'val_auc': validation_auc})
     logging.info('validation_loss is {}, validation_acc is {}, validation_f1 is {}, validation_auc is {}'.format(val_epoch_loss, validation_acc, validation_f1, validation_auc))
 
     return validation_acc
 
+def test(args, model, device, text_processor, vision_processor):
 
-#def test(args, model, device, data, processor):
-def test(args, model, device):
-
-    text_processor = CLIPTokenizerFast.from_pretrained(args.pretrained_model)
-    vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
+    # text_processor = CLIPTokenizerFast.from_pretrained(args.pretrained_model)
+    # vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
 
     load_file = os.path.join(args.model_output_directory, 'checkpoint.pth')
     checkpoint = torch.load(load_file, map_location='cpu')
@@ -192,7 +185,6 @@ def test(args, model, device):
     
     if 'optimizer' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer'])
-        # print('With optimizer & scheduler!')
 
     model.eval()
     criterion = nn.CrossEntropyLoss()
@@ -206,9 +198,9 @@ def test(args, model, device):
 
     epoch_loss, acc, f1, auc = evaluate(args, model, device, criterion, test_loader, text_processor, vision_processor)
 
-    # test results
-    # wandb.log({'test_loss': epoch_loss, 'test_acc': acc, 'test_f1': f1, 'test_auc': auc})
+    ## test results
+    wandb.log({'test_loss': epoch_loss, 'test_acc': acc, 'test_f1': f1, 'test_auc': auc})
     logging.info('test_loss is {}, test_acc is {}, test_f1 is {}, test_auc is {}'.format(epoch_loss, acc, f1, auc))
 
-    # torch.cuda.empty_cache()
     logger.info('Test done')
+    torch.cuda.empty_cache()
