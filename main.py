@@ -4,10 +4,8 @@ import torch
 import random
 import numpy as np
 import wandb
-from data.dataset import Mustard
-from models.CLIP.model import CLIP
-from models.CLIP.train import train
-from transformers import CLIPProcessor
+from models.model import TextModel, FusionModel, CrossAttentionModel
+from models.engine import train, test
 
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -15,41 +13,33 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 def set_args():
     parser = argparse.ArgumentParser()
     
-    #training
-    parser.add_argument('--clip_lr', default=1e-6, type=float, help='learning rate for clip parameters')
-    parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
-    parser.add_argument('--num_train_epoches', default=8, type=int, help='number of epochs')
-    parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
-    parser.add_argument('--weight_decay', default=0.05, type=float, help='weight decay for regularization')
-
-    #model
-    parser.add_argument('--max_grad_norm', default=5.0, type=float, help='max norm of clip parameter gradients')
-    parser.add_argument('--dropout_rate', default=0.3, type=float, help='dropout probability')
-    parser.add_argument('--warmup_proportion', default=0.2, type=float, help='warmup proportion for learning rate scheduler')
-    parser.add_argument('--epsilon_adam', default=1e-8, type=float, help='epsilon for adam optimizer')
-    parser.add_argument('--layers', default=3, type=int, help='number of transformer layers')
-    parser.add_argument('--embed_dim', default=512, type=int, help='dimensionality of the model embedding')
-    parser.add_argument('--num_mha', default=8, type=int, help='number of multi head attentions')
-
-    #experiment
-    parser.add_argument('--text_size', default=512, type=int, help='text hidden size')
-    parser.add_argument('--image_size', default=224, type=int, help='image hidden size')
-    parser.add_argument('--text_max_len', default=77, type=int, help='max length of text for clip')
-    parser.add_argument('--seed', default=24, type=int, help='random seed')
-    parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
+    ## general
+    parser.add_argument('--model', default='cross_attention', type=str, help='choose between text, fusion and cross_attention')
     parser.add_argument('--device', default='0', type=str, help='device')
+
+    ## training
+    parser.add_argument('--text_lr', default=None, type=float, help='learning rate for text parameters')
+    parser.add_argument('--vision_lr', default=None, type=float, help='learning rate for vision parameters')
+    parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
+    parser.add_argument('--weight_decay', default=0.2, type=float, help='weight decay for regularization')
+    parser.add_argument('--warmup_proportion', default=0.1, type=float, help='warmup proportion for learning rate scheduler')
+    parser.add_argument('--dropout_rate', default=0.2, type=float, help='dropout probability')
+
+    ## model
+    parser.add_argument('--pretrained_model', default="openai/clip-vit-base-patch32", type=str, help="load pretrained model")
+    parser.add_argument('--freeze_pretrained_model', action="store_true", default=False)
+    parser.add_argument('--num_train_epoches', default=2, type=int, help='number of epochs')
+    parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
+    parser.add_argument('--num_heads_ca', default=8, type=int, help='number of heads for cross attention')
     parser.add_argument('--label_number', default=2, type=int, help='number of labels')
 
-    #data
-    parser.add_argument('--labels', default=2, type=int, help='number of labels')
-    parser.add_argument('--videos_path', default='videos', type=str, help='path to videos')
-    parser.add_argument('--num_frames', default=12, type=int, help='number of frames')
-    parser.add_argument('--video_sample_type', default='uniform', type=str, help='video sample type')
-    parser.add_argument('--input_res', default=224, type=int, help='input resolution for videos')
-    parser.add_argument('--output_dir', default='./output_dir', type=str, help='output path')
-    parser.add_argument('--log_dir', default='./log_dir', type=str, help='log path')
+    ## experiment
+    parser.add_argument('--seed', default=42, type=int, help='random seed')
 
-    #parser.add_argument('--', default=, type=, help='')
+    ## data
+    parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
+    parser.add_argument('--model_output_directory', default='models/checkpoints', type=str, help='folder where model is saved to')
+    parser.add_argument('--path_to_pt', default='data/mustard/preprocessed/', type=str, help='path to .pt file')
 
     return parser.parse_args()
     
@@ -57,16 +47,10 @@ def main():
     args = set_args()
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    
+    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
     device = torch.device("cuda" if torch.cuda.is_available() and int(args.device) >= 0 else "cpu")
-
-    if not os.path.exists(args.log_dir):
-        os.mkdir(args.log_dir)
-    else:
-        os.rmdir(args.log_dir)
-        os.mkdir(args.log_dir)
 
     if args.seed is not None and args.seed >= 0:
         random.seed(args.seed)
@@ -80,18 +64,45 @@ def main():
 
     wandb.init(project='mmtsarcasm', notes='mmt', tags=['mmt'], config=vars(args))
     wandb.watch_called = False
+    
+    ## define learning rate
+    if not args.text_lr:
+        args.text_lr = args.lr
 
-    train_data = Mustard(mode='train')
-    val_data = Mustard(mode='val')
-    test_data = Mustard(mode='test')
+    if not args.vision_lr:
+        args.vision_lr = args.lr
+    
+    ## define model
+    if args.model == 'text':
+        model = TextModel(args)
+        if args.freeze_pretrained_model == True:
+            for _, p in model.model_text.text_model.named_parameters():
+                p.requires_grad = False
+            for _, p in model.classification_head.named_parameters():
+                p.requires_grad = True
+    elif args.model == 'fusion':
+        model = FusionModel(args)
+        if args.freeze_pretrained_model == True:
+            for _, p in model.model_text.text_model.named_parameters():
+                p.requires_grad = True
+            for _, p in model.model_vision.vision_model.named_parameters():
+                p.requires_grad = False
+    elif args.model == 'cross_attention':
+        model = CrossAttentionModel(args)
+        if args.freeze_pretrained_model == True:
+            for _, p in model.model_text.text_model.named_parameters():
+                p.requires_grad = False
+            for _, p in model.model_vision.vision_model.named_parameters():
+                p.requires_grad = False
 
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    model = CLIP(args)
+    # print(model)
+    # nb_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # print(f"\nNumber of model parameters: {nb_params/1e6:.3f}M\n")
 
     model.to(device)
     wandb.watch(model, log='all')
 
-    train(args, train_data, val_data, test_data, model, processor, device)
+    train(args, model, device)
 
 if __name__ == '__main__':
     main()
