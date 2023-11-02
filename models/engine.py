@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import trange
 from sklearn import metrics
 from transformers import CLIPTokenizerFast, CLIPImageProcessor
-from transformers.optimization import AdamW, get_linear_schedule_with_warmup
+from transformers.optimization import AdamW, get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
 from utils.metrics import evaluate
 from utils.utils import flatten
 
@@ -57,7 +57,8 @@ def train(args, model, device):
     
     criterion = nn.CrossEntropyLoss()
 
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
+    # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
 
     max_accuracy = 0.
 
@@ -115,7 +116,7 @@ def train(args, model, device):
         f1 = metrics.f1_score(targets.cpu(), y_pred, pos_label=1)
 
         ## train results
-        wandb.log({'train_loss': epoch_loss, 'train_acc': acc, 'train_f1': f1, 'train_auc': auc})
+        wandb.log({f'train_loss_{args.model}': epoch_loss, f'train_acc_{args.model}': acc, f'train_f1_{args.model}': f1, f'train_auc_{args.model}': auc})
         logging.info('i_epoch is {}, train_loss is {}, train_acc is {}, train_f1 is {}, train_auc is {}'.format(i_epoch, epoch_loss, acc, f1, auc))
 
         ## validation results
@@ -128,7 +129,7 @@ def train(args, model, device):
             if not os.path.exists(args.model_output_directory):
                 os.mkdir(args.model_output_directory)
 
-            checkpoint_file = 'checkpoint.pth'
+            checkpoint_file = f'checkpoint_{args.model}.pth'
 
             dict_to_save = {
                 'model': model.state_dict(),
@@ -152,7 +153,7 @@ def validate(args, model, device, val_data, text_processor, vision_processor):
         val_loader = DataLoader(val_data, batch_size=args.batch_size, collate_fn=MustardText.collate_func, shuffle=False, num_workers=args.num_workers)
 
     val_epoch_loss, validation_acc, validation_f1, validation_auc = evaluate(args, model, device, criterion, val_loader, text_processor, vision_processor)
-    wandb.log({'val_acc': validation_acc, 'val_f1': validation_f1, 'val_auc': validation_auc})
+    wandb.log({f'val_loss_{args.model}': val_epoch_loss, f'val_acc_{args.model}': validation_acc, f'val_f1_{args.model}': validation_f1, f'val_auc_{args.model}': validation_auc})
     logging.info('validation_loss is {}, validation_acc is {}, validation_f1 is {}, validation_auc is {}'.format(val_epoch_loss, validation_acc, validation_f1, validation_auc))
 
     return validation_acc
@@ -162,7 +163,7 @@ def test(args, model, device, text_processor, vision_processor):
     # text_processor = CLIPTokenizerFast.from_pretrained(args.pretrained_model)
     # vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
 
-    load_file = os.path.join(args.model_output_directory, 'checkpoint.pth')
+    load_file = os.path.join(args.model_output_directory, f'checkpoint_{args.model}.pth')
     checkpoint = torch.load(load_file, map_location='cpu')
 
     model.load_state_dict(checkpoint['model'])
@@ -199,7 +200,7 @@ def test(args, model, device, text_processor, vision_processor):
     epoch_loss, acc, f1, auc = evaluate(args, model, device, criterion, test_loader, text_processor, vision_processor)
 
     ## test results
-    wandb.log({'test_loss': epoch_loss, 'test_acc': acc, 'test_f1': f1, 'test_auc': auc})
+    wandb.log({f'test_loss_{args.model}': epoch_loss, f'test_acc_{args.model}': acc, f'test_f1_{args.model}': f1, f'test_auc_{args.model}': auc})
     logging.info('test_loss is {}, test_acc is {}, test_f1 is {}, test_auc is {}'.format(epoch_loss, acc, f1, auc))
 
     logger.info('Test done')

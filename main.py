@@ -38,9 +38,7 @@ def set_args():
 
     ## data
     parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
-    parser.add_argument('--model_output_directory', default='model/checkpoints', type=str, help='folder where model is saved to')
-    parser.add_argument('--optimizer_output_directory', default='model/optimizer_output', type=str, help='folder where optimizer is saved to')
-    parser.add_argument('--logging_directory', default='./log_dir', type=str, help='logging path')
+    parser.add_argument('--model_output_directory', default='models/checkpoints', type=str, help='folder where model is saved to')
     parser.add_argument('--path_to_pt', default='data/mustard/preprocessed/', type=str, help='path to .pt file')
 
     return parser.parse_args()
@@ -105,7 +103,6 @@ def main():
     wandb.watch(model, log='all')
 
     train(args, model, device)
-    #torch.cuda.empty_cache()
 
 if __name__ == '__main__':
     main()
