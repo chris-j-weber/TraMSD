@@ -12,7 +12,12 @@ class TextModel(nn.Module):
 
         self.text_embed_dim = self.model_text.config.hidden_size
 
-        self.classification_head = nn.Linear(self.text_embed_dim, self.args.label_number)
+        self.classification_head = nn.Sequential(
+            nn.Linear(self.text_embed_dim, 256),
+            nn.Dropout(p=args.dropout_rate),
+            nn.ReLU(),
+            nn.Linear(256, self.args.label_number)
+        )
     
     def forward(self, text_input, lengths):
         model_outputs = self.model_text(**text_input)
@@ -90,7 +95,12 @@ class CrossAttentionModel(nn.Module):
                                                      num_heads=self.args.num_heads_ca, 
                                                      batch_first=True)
 
-        self.classification_head = nn.Linear(self.text_embed_dim, self.args.label_number)
+        self.classification_head = nn.Sequential(
+            nn.Linear(self.text_embed_dim, 256),
+            nn.Dropout(p=args.dropout_rate),
+            nn.ReLU(),
+            nn.Linear(256, self.args.label_number)
+        )
 
     def forward(self, text_input, video_input, lengths):
         text_model_output = self.model_text(**text_input, output_attentions=False)
