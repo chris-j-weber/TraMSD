@@ -10,6 +10,7 @@ from tqdm import trange
 from sklearn import metrics
 from transformers import CLIPTokenizerFast, CLIPImageProcessor
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup, get_cosine_schedule_with_warmup
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.metrics import evaluate
 from utils.utils import flatten
 
@@ -59,6 +60,7 @@ def train(args, model, device):
 
     # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
     scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=int(args.warmup_proportion * total_steps), num_training_steps=total_steps)
+    # scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=6)
 
     max_accuracy = 0.
 
@@ -102,11 +104,11 @@ def train(args, model, device):
             
             loss.backward()
             optimizer.step()
-            scheduler.step() 
+            scheduler.step()
 
             running_loss += loss.item()
 
-        ## stats
+        # stats
         epoch_loss = running_loss / len(train_loader)
         
         targets = torch.tensor(targets).to(device)
@@ -114,13 +116,24 @@ def train(args, model, device):
         acc = metrics.accuracy_score(targets.cpu(), y_pred)
         auc = metrics.roc_auc_score(targets.cpu(), np.array(prob)[:, 1])
         f1 = metrics.f1_score(targets.cpu(), y_pred, pos_label=1)
+        precision = metrics.precision_score(targets.cpu(), y_pred)
+        recall = metrics.recall_score(targets.cpu(), y_pred)
 
         ## train results
-        wandb.log({f'train_loss_{args.model}': epoch_loss, f'train_acc_{args.model}': acc, f'train_f1_{args.model}': f1, f'train_auc_{args.model}': auc})
-        logging.info('i_epoch is {}, train_loss is {}, train_acc is {}, train_f1 is {}, train_auc is {}'.format(i_epoch, epoch_loss, acc, f1, auc))
+        wandb.log({f'train_loss': epoch_loss, 
+                   f'train_acc': acc, 
+                   f'train_f1': f1, 
+                   f'train_auc': auc, 
+                   f'train_pre': precision, 
+                   f'train_rec': recall})
+        logging.info('i_epoch is {}, train_loss is {}, train_acc is {}, train_f1 is {}, train_auc is {}, train_pre is {}, train_rec is {}'.format(i_epoch, epoch_loss, acc, f1, auc, precision, recall))
 
         ## validation results
         validation_acc = validate(args, model, device, val_data, text_processor, vision_processor)
+
+        ## scheduler for on plateau + new val returns
+        # validation_acc, val_loss = validate(args, model, device, val_data, text_processor, vision_processor)
+        # scheduler.step(val_loss)
 
         ## save best model
         if validation_acc > max_accuracy:
@@ -141,7 +154,6 @@ def train(args, model, device):
             torch.save(dict_to_save, output_dir)
 
     logger.info('Train done')
-    test(args, model, device, text_processor, vision_processor)
 
 def validate(args, model, device, val_data, text_processor, vision_processor):
     model.eval()
@@ -152,16 +164,23 @@ def validate(args, model, device, val_data, text_processor, vision_processor):
     else:
         val_loader = DataLoader(val_data, batch_size=args.batch_size, collate_fn=MustardText.collate_func, shuffle=False, num_workers=args.num_workers)
 
-    val_epoch_loss, validation_acc, validation_f1, validation_auc = evaluate(args, model, device, criterion, val_loader, text_processor, vision_processor)
-    wandb.log({f'val_loss_{args.model}': val_epoch_loss, f'val_acc_{args.model}': validation_acc, f'val_f1_{args.model}': validation_f1, f'val_auc_{args.model}': validation_auc})
-    logging.info('validation_loss is {}, validation_acc is {}, validation_f1 is {}, validation_auc is {}'.format(val_epoch_loss, validation_acc, validation_f1, validation_auc))
+    val_loss, val_acc, val_f1, val_auc, val_pre, val_rec = evaluate(args, model, device, criterion, val_loader, text_processor, vision_processor)
 
-    return validation_acc
+    wandb.log({f'val_loss': val_loss,
+               f'val_acc': val_acc, 
+               f'val_f1': val_f1, 
+               f'val_auc': val_auc, 
+               f'val_pre': val_pre, 
+               f'val_rec': val_rec})
+    logging.info('val_loss is {}, val_acc is {}, val_f1 is {}, val_auc is {}, val_pre is {}, val_rec is {}'.format(val_loss, val_acc, val_f1, val_auc, val_pre, val_rec))
 
-def test(args, model, device, text_processor, vision_processor):
+    return val_acc
+    # return val_acc, val_loss
 
-    # text_processor = CLIPTokenizerFast.from_pretrained(args.pretrained_model)
-    # vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
+def test(args, model, device):
+
+    text_processor = CLIPTokenizerFast.from_pretrained(args.pretrained_model)
+    vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
 
     load_file = os.path.join(args.model_output_directory, f'checkpoint_{args.model}.pth')
     checkpoint = torch.load(load_file, map_location='cpu')
@@ -197,11 +216,16 @@ def test(args, model, device, text_processor, vision_processor):
         text_data = MustardText(args, device, args.path_to_pt+'text_test.pt', args.path_to_pt+'labels_test.pt')
         test_loader = DataLoader(text_data, batch_size=args.batch_size, collate_fn=MustardText.collate_func, shuffle=False, num_workers=args.num_workers)
 
-    epoch_loss, acc, f1, auc = evaluate(args, model, device, criterion, test_loader, text_processor, vision_processor)
+    loss, acc, f1, auc, pre, rec = evaluate(args, model, device, criterion, test_loader, text_processor, vision_processor)
 
     ## test results
-    wandb.log({f'test_loss_{args.model}': epoch_loss, f'test_acc_{args.model}': acc, f'test_f1_{args.model}': f1, f'test_auc_{args.model}': auc})
-    logging.info('test_loss is {}, test_acc is {}, test_f1 is {}, test_auc is {}'.format(epoch_loss, acc, f1, auc))
+    wandb.log({f'test_loss': loss,
+               f'test_acc': acc, 
+               f'test_f1': f1, 
+               f'test_auc': auc, 
+               f'test_pre': pre, 
+               f'test_rec': rec})
+    logging.info('test_loss is {}, test_acc is {}, test_f1 is {}, test_auc is {}, test_pre is {}, test_rec is {}'.format(loss, acc, f1, auc, pre, rec))
 
+    # torch.cuda.empty_cache()
     logger.info('Test done')
-    torch.cuda.empty_cache()

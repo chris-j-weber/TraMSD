@@ -84,16 +84,28 @@ def main():
         model = FusionModel(args)
         if args.freeze_pretrained_model == True:
             for _, p in model.model_text.text_model.named_parameters():
-                p.requires_grad = True
+                if 'final_layer_norm' in _ or 'layer_norm2' in _:
+                    p.requires_grad = True
+                else:    
+                    p.requires_grad = False
             for _, p in model.model_vision.vision_model.named_parameters():
-                p.requires_grad = False
+                if 'post_layernorm' in _ or 'layer_norm2' in _:
+                    p.requires_grad = True
+                else:
+                    p.requires_grad = False
     elif args.model == 'cross_attention':
         model = CrossAttentionModel(args)
         if args.freeze_pretrained_model == True:
             for _, p in model.model_text.text_model.named_parameters():
-                p.requires_grad = False
+                if 'final_layer_norm' in _ or 'layer_norm2' in _:
+                    p.requires_grad = True
+                else:    
+                    p.requires_grad = False
             for _, p in model.model_vision.vision_model.named_parameters():
-                p.requires_grad = False
+                if 'post_layernorm' in _ or 'layer_norm2' in _:
+                    p.requires_grad = True
+                else:
+                    p.requires_grad = False
 
     # print(model)
     # nb_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -103,6 +115,8 @@ def main():
     wandb.watch(model, log='all')
 
     train(args, model, device)
+
+    test(args, model, device)
 
 if __name__ == '__main__':
     main()

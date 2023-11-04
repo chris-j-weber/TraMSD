@@ -26,8 +26,28 @@ def set_args():
     parser.add_argument('--model', default='fusion', type=str, help='choose between text, fusion and cross_attention')
     parser.add_argument('--device', default='0', type=str, help='device')
 
+    ## training
+    parser.add_argument('--text_lr', default=None, type=float, help='learning rate for text parameters')
+    parser.add_argument('--vision_lr', default=None, type=float, help='learning rate for vision parameters')
+    parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
+    parser.add_argument('--weight_decay', default=0.2, type=float, help='weight decay for regularization')
+    parser.add_argument('--warmup_proportion', default=0.1, type=float, help='warmup proportion for learning rate scheduler')
+    parser.add_argument('--dropout_rate', default=0.2, type=float, help='dropout probability')
+
+    ## model
+    parser.add_argument('--pretrained_model', default="openai/clip-vit-base-patch32", type=str, help="load pretrained model")
+    parser.add_argument('--freeze_pretrained_model', action="store_true", default=False)
+    parser.add_argument('--num_train_epoches', default=50, type=int, help='number of epochs')
+    parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
+    parser.add_argument('--num_heads_ca', default=8, type=int, help='number of heads for cross attention')
+    parser.add_argument('--label_number', default=2, type=int, help='number of labels')
+
+    ## experiment
+    parser.add_argument('--seed', default=42, type=int, help='random seed')
+
     ## data
-    parser.add_argument('--model_output_directory', default='models/checkpoints', type=str, help='folder where model is saved to')
+    parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
+    parser.add_argument('--model_output_directory', default='model/checkpoints', type=str, help='folder where model is saved to')
     parser.add_argument('--path_to_pt', default='data/mustard/preprocessed/', type=str, help='path to .pt file')
 
     return parser.parse_args()
@@ -44,6 +64,12 @@ def main():
     wandb.init(project='mmtsarcasm', notes='mmt', tags=['mmt'], config=vars(args))
     wandb.watch_called = False
 
+    ## define learning rates
+    if not args.text_lr:
+        args.text_lr = args.lr
+    if not args.vision_lr:
+        args.vision_lr = args.lr
+
     if args.model == 'text':
         model = TextModel(args)
     elif args.model == 'fusion':
@@ -54,14 +80,17 @@ def main():
     model.to(device)
     wandb.watch(model, log='all')
 
+    ## load modul processors
     text_processor = CLIPTokenizerFast.from_pretrained(args.pretrained_model)
     vision_processor = CLIPImageProcessor.from_pretrained(args.pretrained_model)
 
+    ## load model checkpoint
     load_file = os.path.join(args.model_output_directory, 'checkpoint_{args.model}.pth')
     checkpoint = torch.load(load_file, map_location='cpu')
 
     model.load_state_dict(checkpoint['model'])
 
+    ## define optimizer
     if args.model in ['fusion', 'cross_attention']:
         base_params = [param for name, param in model.named_parameters() if 'model_vision' not in name and 'model_text' not in name]
         optimizer = AdamW([{'params': base_params},
@@ -78,12 +107,14 @@ def main():
 
     # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
+    ## check and load optimizer if possible
     if 'optimizer' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer'])
 
     model.eval()
     criterion = nn.CrossEntropyLoss()
 
+    ## load test data
     if args.model in ['fusion', 'cross_attention']:
         text_data = MustardVideoText(args, device, args.path_to_pt+'video_test.pt', args.path_to_pt+'text_test.pt', args.path_to_pt+'labels_test.pt', args.path_to_pt+'ids_test.pt')
         test_loader = DataLoader(text_data, batch_size=args.batch_size, collate_fn=MustardVideoText.collate_func, shuffle=False, num_workers=args.num_workers)
@@ -91,11 +122,17 @@ def main():
         text_data = MustardText(args, device, args.path_to_pt+'text_test.pt', args.path_to_pt+'labels_test.pt')
         test_loader = DataLoader(text_data, batch_size=args.batch_size, collate_fn=MustardText.collate_func, shuffle=False, num_workers=args.num_workers)
 
-    epoch_loss, acc, f1, auc = evaluate(args, model, device, criterion, test_loader, text_processor, vision_processor)
+    ## run metric evaluation
+    loss, acc, f1, auc, pre, rec = evaluate(args, model, device, criterion, test_loader, text_processor, vision_processor)
 
     ## test results
-    wandb.log({f'test_loss_{args.model}': epoch_loss, f'test_acc_{args.model}': acc, f'test_f1_{args.model}': f1, f'test_auc_{args.model}': auc})
-    logging.info('test_loss is {}, test_acc is {}, test_f1 is {}, test_auc is {}'.format(epoch_loss, acc, f1, auc))
+    wandb.log({f'test_loss': loss, 
+               f'test_acc': acc, 
+               f'test_f1': f1, 
+               f'test_auc': auc, 
+               f'test_pre': pre, 
+               f'test_rec': rec})
+    logging.info('test_loss is {}, test_acc is {}, test_f1 is {}, test_auc is {}, test_pre is {}, test_rec is {}'.format(loss, acc, f1, auc, pre, rec))
 
     logger.info('Test done')
     torch.cuda.empty_cache()

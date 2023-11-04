@@ -4,11 +4,13 @@ from sklearn import metrics
 from utils.utils import flatten
 
 def evaluate(args, model, device, criterion, data, text_processor, vision_processor):
-    
+    model.eval()
+
     prob = []
     y_pred = []
     targets = []
     running_loss = 0
+    steps = 0
 
     with torch.no_grad():
         for step, batch in enumerate(data):
@@ -35,13 +37,16 @@ def evaluate(args, model, device, criterion, data, text_processor, vision_proces
 
             loss = criterion(pred, target)
             running_loss += loss.item()
+            steps += 1
 
-    loss = running_loss / len(data)
+    loss = running_loss / steps
 
     targets = torch.tensor(targets).to(device)
     y_pred = np.argmax(np.array(prob), axis=-1)
     acc = metrics.accuracy_score(targets.cpu(), y_pred)
     auc = metrics.roc_auc_score(targets.cpu(), np.array(prob)[:, 1])
     f1 = metrics.f1_score(targets.cpu(), y_pred, pos_label=1)
+    precision = metrics.precision_score(targets.cpu(), y_pred)
+    recall = metrics.recall_score(targets.cpu(), y_pred)
 
-    return loss, acc, auc, f1
+    return loss, acc, auc, f1, precision, recall
