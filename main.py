@@ -21,7 +21,7 @@ def set_args():
     parser.add_argument('--text_lr', default=None, type=float, help='learning rate for text parameters')
     parser.add_argument('--vision_lr', default=None, type=float, help='learning rate for vision parameters')
     parser.add_argument('--lr', default=1e-5, type=float, help='learning rate for non clip parameters')
-    parser.add_argument('--weight_decay', default=0.2, type=float, help='weight decay for regularization')
+    parser.add_argument('--weight_decay', default=1e-5, type=float, help='weight decay for regularization')
     parser.add_argument('--warmup_proportion', default=0.1, type=float, help='warmup proportion for learning rate scheduler')
     parser.add_argument('--dropout_rate', default=0.2, type=float, help='dropout probability')
 
@@ -76,36 +76,43 @@ def main():
     if args.model == 'text':
         model = TextModel(args)
         if args.freeze_pretrained_model == True:
+            ## freeze Text model parameters
             for _, p in model.model_text.text_model.named_parameters():
                 p.requires_grad = False
             for _, p in model.classification_head.named_parameters():
                 p.requires_grad = True
+            ## unfreeze last 2 layers of Text model
+            for i in range(10, 12):
+                for param in model.model_text.text_model.encoder.layers[i].parameters():
+                    param.requires_grad = True
     elif args.model == 'fusion':
         model = FusionModel(args)
         if args.freeze_pretrained_model == True:
+            ## freeze Text+Vision model parameters
             for _, p in model.model_text.text_model.named_parameters():
-                if 'final_layer_norm' in _ or 'layer_norm2' in _:
-                    p.requires_grad = True
-                else:    
                     p.requires_grad = False
             for _, p in model.model_vision.vision_model.named_parameters():
-                if 'post_layernorm' in _ or 'layer_norm2' in _:
-                    p.requires_grad = True
-                else:
                     p.requires_grad = False
+            ## unfreeze last 2 layers of Text+Vision model
+            for i in range(10, 12):
+                for param in model.model_text.text_model.encoder.layers[i].parameters():
+                    param.requires_grad = True
+                for param in model.model_vision.vision_model.encoder.layers[i].parameters():
+                    param.requires_grad = True
     elif args.model == 'cross_attention':
         model = CrossAttentionModel(args)
         if args.freeze_pretrained_model == True:
+            ## freeze Text+Vision model parameters
             for _, p in model.model_text.text_model.named_parameters():
-                if 'final_layer_norm' in _ or 'layer_norm2' in _:
-                    p.requires_grad = True
-                else:    
                     p.requires_grad = False
             for _, p in model.model_vision.vision_model.named_parameters():
-                if 'post_layernorm' in _ or 'layer_norm2' in _:
-                    p.requires_grad = True
-                else:
                     p.requires_grad = False
+            ## unfreeze last 2 layers of Text+Vision model
+            for i in range(10, 12):
+                for param in model.model_text.text_model.encoder.layers[i].parameters():
+                    param.requires_grad = True
+                for param in model.model_vision.vision_model.encoder.layers[i].parameters():
+                    param.requires_grad = True
 
     # print(model)
     # nb_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

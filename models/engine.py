@@ -40,14 +40,14 @@ def train(args, model, device):
     if args.model in ['fusion', 'cross_attention']:
         base_params = [param for name, param in model.named_parameters() if 'model_vision' not in name and 'model_text' not in name]
         optimizer = AdamW([{'params': base_params},
-                           {'params': model.model_vision.parameters(), 'lr': args.vision_lr},
-                           {'params': model.model_text.parameters(), 'lr': args.text_lr}], 
+                           {'params': model.model_vision.parameters(), 'lr': args.vision_lr*0.1},
+                           {'params': model.model_text.parameters(), 'lr': args.text_lr*0.1}], 
                            lr=args.lr,
                            weight_decay=args.weight_decay)
     else:
         base_params = [param for name, param in model.named_parameters() if 'model_text' not in name]
         optimizer = AdamW([{'params': base_params},
-                           {'params': model.model_text.parameters(), 'lr': args.text_lr}], 
+                           {'params': model.model_text.parameters(), 'lr': args.text_lr*0.1}], 
                            lr=args.lr,
                            weight_decay=args.weight_decay)
     
@@ -190,14 +190,14 @@ def test(args, model, device):
     if args.model in ['fusion', 'cross_attention']:
         base_params = [param for name, param in model.named_parameters() if 'model_vision' not in name and 'model_text' not in name]
         optimizer = AdamW([{'params': base_params},
-                           {'params': model.model_vision.parameters(), 'lr': args.vision_lr},
-                           {'params': model.model_text.parameters(), 'lr': args.text_lr}], 
+                           {'params': model.model_vision.parameters(), 'lr': args.vision_lr*0.1},
+                           {'params': model.model_text.parameters(), 'lr': args.text_lr*0.1}], 
                            lr=args.lr,
                            weight_decay=args.weight_decay)
     else:
         base_params = [param for name, param in model.named_parameters() if 'model_text' not in name]
         optimizer = AdamW([{'params': base_params},
-                           {'params': model.model_text.parameters(), 'lr': args.text_lr}], 
+                           {'params': model.model_text.parameters(), 'lr': args.text_lr*0.1}], 
                            lr=args.lr,
                            weight_decay=args.weight_decay)
 
