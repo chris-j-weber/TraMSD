@@ -33,7 +33,7 @@ def train(args, model, device):
         val_data = MustardText(args, device, args.path_to_pt+'text_val.pt', args.path_to_pt+'labels_val.pt')
         train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, collate_fn=MustardText.collate_func, shuffle=True, num_workers=args.num_workers)
 
-    total_steps = int(len(train_loader) * args.num_train_epoches)
+    total_steps = int(len(train_loader) * args.num_train_epochs)
     model.to(device)
 
     ## custom AdamW optimizer
@@ -64,7 +64,7 @@ def train(args, model, device):
 
     max_accuracy = 0.
 
-    for i_epoch in trange(0, int(args.num_train_epoches), desc='epoch', disable=False):
+    for i_epoch in trange(0, int(args.num_train_epochs), desc='epoch', disable=False):
         model.train()
 
         prob = []

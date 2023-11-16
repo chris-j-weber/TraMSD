@@ -37,7 +37,7 @@ def set_args():
     ## model
     parser.add_argument('--pretrained_model', default="openai/clip-vit-base-patch32", type=str, help="load pretrained model")
     parser.add_argument('--freeze_pretrained_model', action="store_true", default=False)
-    parser.add_argument('--num_train_epoches', default=50, type=int, help='number of epochs')
+    parser.add_argument('--num_train_epochs', default=50, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
     parser.add_argument('--num_heads_ca', default=8, type=int, help='number of heads for cross attention')
     parser.add_argument('--label_number', default=2, type=int, help='number of labels')
