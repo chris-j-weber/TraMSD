@@ -28,7 +28,7 @@ def set_args():
     ## model
     parser.add_argument('--pretrained_model', default="openai/clip-vit-base-patch32", type=str, help="load pretrained model")
     parser.add_argument('--freeze_pretrained_model', action="store_true", default=False)
-    parser.add_argument('--num_train_epochs', default=2, type=int, help='number of epochs')
+    parser.add_argument('--num_train_epoches', default=40, type=int, help='number of epochs')
     parser.add_argument('--batch_size', default=32, type=int, help='batch size for train and valid')
     parser.add_argument('--num_heads_ca', default=8, type=int, help='number of heads for cross attention')
     parser.add_argument('--label_number', default=2, type=int, help='number of labels')
@@ -37,9 +37,14 @@ def set_args():
     parser.add_argument('--seed', default=42, type=int, help='random seed')
 
     ## data
-    parser.add_argument('--num_workers', default=8, type=int, help='number of workers')
-    parser.add_argument('--model_output_directory', default='models/checkpoints', type=str, help='folder where model is saved to')
+    parser.add_argument('--num_workers', default=32, type=int, help='number of workers')
+    parser.add_argument('--model_output_directory', default='model/checkpoints', type=str, help='folder where model is saved to')
     parser.add_argument('--path_to_pt', default='data/mustard/preprocessed/', type=str, help='path to .pt file')
+
+    ## ablation
+    parser.add_argument('--dataset', default='stratified', type=str, help='choose between stratified and holdout')
+    parser.add_argument('--pooling', default='max_attention', type=str, help='choose between max_attention, mean_attention and mean_mean')
+    parser.add_argument('--num_unfreeze_layers', default=2, type=int, help='number of layers to unfreeze')
 
     return parser.parse_args()
     
@@ -71,48 +76,32 @@ def main():
 
     if not args.vision_lr:
         args.vision_lr = args.lr
-    
+
     ## define model
     if args.model == 'text':
         model = TextModel(args)
+        ## freeze encoder
         if args.freeze_pretrained_model == True:
-            ## freeze Text model parameters
             for _, p in model.model_text.text_model.named_parameters():
-                p.requires_grad = False
+                    p.requires_grad = False
             for _, p in model.classification_head.named_parameters():
                 p.requires_grad = True
-            ## unfreeze last 2 layers of Text model
-            for i in range(10, 12):
-                for param in model.model_text.text_model.encoder.layers[i].parameters():
-                    param.requires_grad = True
     elif args.model == 'fusion':
         model = FusionModel(args)
+        ## freeze encoder
         if args.freeze_pretrained_model == True:
-            ## freeze Text+Vision model parameters
             for _, p in model.model_text.text_model.named_parameters():
-                    p.requires_grad = False
+                p.requires_grad = False
             for _, p in model.model_vision.vision_model.named_parameters():
-                    p.requires_grad = False
-            ## unfreeze last 2 layers of Text+Vision model
-            for i in range(10, 12):
-                for param in model.model_text.text_model.encoder.layers[i].parameters():
-                    param.requires_grad = True
-                for param in model.model_vision.vision_model.encoder.layers[i].parameters():
-                    param.requires_grad = True
+                p.requires_grad = False
     elif args.model == 'cross_attention':
         model = CrossAttentionModel(args)
+        ## freeze encoder
         if args.freeze_pretrained_model == True:
-            ## freeze Text+Vision model parameters
             for _, p in model.model_text.text_model.named_parameters():
-                    p.requires_grad = False
+                p.requires_grad = False
             for _, p in model.model_vision.vision_model.named_parameters():
-                    p.requires_grad = False
-            ## unfreeze last 2 layers of Text+Vision model
-            for i in range(10, 12):
-                for param in model.model_text.text_model.encoder.layers[i].parameters():
-                    param.requires_grad = True
-                for param in model.model_vision.vision_model.encoder.layers[i].parameters():
-                    param.requires_grad = True
+                p.requires_grad = False
 
     # print(model)
     # nb_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -122,7 +111,6 @@ def main():
     wandb.watch(model, log='all')
 
     train(args, model, device)
-
     test(args, model, device)
 
 if __name__ == '__main__':

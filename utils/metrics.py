@@ -16,7 +16,7 @@ def evaluate(args, model, device, criterion, data, text_processor, vision_proces
         for step, batch in enumerate(data):
             if args.model in ['fusion', 'cross_attention']:
                 videos, text, label = batch
-                frames = torch.flatten(videos, start_dim=0, end_dim=1).to(device)
+                frames = torch.flatten(videos, start_dim=0, end_dim=1).to(device, non_blocking=True)
                 flattened_text, text_lengths = flatten(text)
 
                 video_inputs = vision_processor(images=frames, padding=True, truncation=True, return_tensors='pt').to(device)
@@ -26,22 +26,23 @@ def evaluate(args, model, device, criterion, data, text_processor, vision_proces
 
             text_inputs = text_processor(text=flattened_text, padding=True, truncation=True, return_tensors='pt').to(device)
 
-            target = torch.tensor(label).to(device)
+            target = torch.tensor(label).to(device, non_blocking=True)
             targets.extend(label)
 
-            if args.model in ['fusion', 'cross_attention']:
-                pred = model(text_inputs, video_inputs, text_lengths)
-            else:
-                pred = model(text_inputs, text_lengths)
-            prob.extend(torch.nn.functional.softmax(pred, dim=-1).detach().cpu())
+            with torch.cuda.amp.autocast():
+                if args.model in ['fusion', 'cross_attention']:
+                    pred = model(text_inputs, video_inputs, text_lengths)
+                else:
+                    pred = model(text_inputs, text_lengths)
+                prob.extend(torch.nn.functional.softmax(pred, dim=-1).detach().cpu())
 
-            loss = criterion(pred, target)
-            running_loss += loss.item()
-            steps += 1
+                loss = criterion(pred, target)
+                running_loss += loss.item()
+                steps += 1
 
-    loss = running_loss / steps
+    loss = running_loss / len(data)
 
-    targets = torch.tensor(targets).to(device)
+    targets = torch.tensor(targets).to(device, non_blocking=True)
     y_pred = np.argmax(np.array(prob), axis=-1)
     acc = metrics.accuracy_score(targets.cpu(), y_pred)
     auc = metrics.roc_auc_score(targets.cpu(), np.array(prob)[:, 1])
