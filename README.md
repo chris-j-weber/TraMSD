@@ -10,5 +10,65 @@ The transformer approache has been trained and evaluated on the [MUStARD++](http
 
 ## Architecture
 
-![TraMSD](/material/tramsd.png)
+![TraMSD](material/tramsd.png)
+
+---
+
+## Environment Setup and Execution Guide
+
+Follow these steps to set up your environment and run the project.
+
+### Download the Dataset
+Download the [Dataset](https://drive.google.com/drive/folders/1kUdT2yU7ERJ5KdauObTj5oQsBlSrvTlW) and put it into /TraMSD/data/mustard/videos.
+
+```
+TraMSD
+├── data
+│   └── mustard
+│       └── videos
+│           ├── augmented_utterance
+│           ├── final_context_videos
+│           └── final_utterance_videos
+└── README.md
+```
+
+
+
+
+### Creating the Conda Environment
+
+First, create a Conda environment using the provided `environment.yml` file. This will ensure you have all the necessary dependencies installed. Open a terminal or command prompt and run the following command:
+
+```bash
+conda env create --file=environment.yml
+```
+
+### Preprocessing with Jupyter Notebook
+
+After creating the environment, you need to preprocess the data using a Jupyter Notebook.
+
+1. Open the Jupyter Notebook located at `/TraMSD/data/mustard/preprocess.ipynb`.
+2. Ensure you switch the kernel to the newly created `TraMSD` environment. This can typically be done from the kernel menu in Jupyter.
+3. Execute all code blocks within the notebook to complete the preprocessing.
+
+### Running the Main Application
+
+Once preprocessing is done, switch to the console to activate the environment and run the main application.
+
+### Activate the `TraMSD` environment with the following command:
+
+```bash
+conda activate TraMSD
+```
+
+### Run the main application using Python:
+
+```bash
+python main.py
+```
+
+### Wandb Key:
+After the script started it will ask you to prompt your Wandb key.
+You’ll need this key to log and track your experiments using Weights & Biases (Wandb).
+Retrieve your Wandb key from your account and paste it where needed in the application.
 
