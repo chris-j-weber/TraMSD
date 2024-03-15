@@ -8,7 +8,7 @@ preprocessed/
 __pycache__/
 *.pyc
 
-checkpoints/
+*.pth
 optimizer_output/
 
 wandb/
